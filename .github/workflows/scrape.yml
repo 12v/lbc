@@ -30,18 +30,10 @@ jobs:
     - name: Run scraper
       run: python scraper.py
 
-    - name: Setup git credentials
-      run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-
     - name: Deploy to GitHub Pages
       run: |
-        git checkout --orphan gh-pages
-        git rm -rf .
-        cp -r docs/* .
-        touch .nojekyll
-        git add .
-        git commit -m "Update docs" || exit 0
-        git push -f origin gh-pages
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add -A docs/
+        git commit -m "Update docs" || true
+        git push origin main:gh-pages
