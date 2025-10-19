@@ -39,8 +39,13 @@ def get_film_data(slug):
     match = re.search(r'<body[^>]+data-tmdb-id="(\d+)"', res.text)
     tmdb_id = match.group(1) if match else None
 
-    match = re.search(r"Watched by ([\d,]+) people", res.text)
-    viewer_count = int(match.group(1).replace(",", "")) if match else None
+    # Get viewer count from stats endpoint
+    stats_url = f"{BASE_URL}/csi/film/{slug}/stats/"
+    stats_res = requests.get(stats_url, headers=HEADERS)
+    viewer_count = None
+    if stats_res.status_code == 200:
+        match = re.search(r'Watched by ([\d,]+)&nbsp;members', stats_res.text)
+        viewer_count = int(match.group(1).replace(",", "")) if match else None
 
     return tmdb_id, viewer_count
 
