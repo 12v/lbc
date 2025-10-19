@@ -1,4 +1,5 @@
 import requests
+from bs4 import BeautifulSoup
 from pathlib import Path
 import time
 import re
@@ -9,14 +10,22 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 }
 
-def get_popular_films():
+def get_film_slugs_from_ajax():
     res = requests.get(AJAX_POPULAR_URL, headers=HEADERS)
     print(f"→ GET {AJAX_POPULAR_URL} → {res.status_code}")
     if res.status_code != 200:
         return []
-    data = res.json()
-    # 'films' is a list of dicts with film info
-    return data.get("films", [])
+
+    # The response is HTML snippet, parse it
+    soup = BeautifulSoup(res.text, "html.parser")
+    poster_items = soup.select("li.posteritem")
+
+    slugs = []
+    for li in poster_items:
+        slug = li.get("data-item-slug")
+        if slug:
+            slugs.append(slug)
+    return slugs
 
 def get_film_data(slug):
     url = f"{BASE_URL}/film/{slug}/"
@@ -24,6 +33,7 @@ def get_film_data(slug):
     if res.status_code != 200:
         print(f"❌ Failed to fetch {slug}")
         return None, None
+
     # Extract tmdb id from body[data-tmdb-id]
     match = re.search(r'<body[^>]+data-tmdb-id="(\d+)"', res.text)
     tmdb_id = match.group(1) if match else None
@@ -39,17 +49,13 @@ def main():
     out_dir.mkdir(exist_ok=True)
 
     print(f"\n📄 Fetching popular films from AJAX endpoint...")
-    films = get_popular_films()
+    slugs = get_film_slugs_from_ajax()
 
-    if not films:
+    if not slugs:
         print("No films found in AJAX response.")
         return
 
-    for film in films:
-        slug = film.get("slug")
-        if not slug:
-            continue
-
+    for slug in slugs:
         print(f"→ Fetching data for {slug}...")
         tmdb_id, viewer_count = get_film_data(slug)
 
