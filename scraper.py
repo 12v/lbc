@@ -22,9 +22,11 @@ def get_film_slugs_from_ajax_page(page):
 
     slugs = []
     for li in poster_items:
-        slug = li.get("data-item-slug")
-        if slug:
-            slugs.append(slug)
+        react_div = li.find("div", class_="react-component")
+        if react_div:
+            slug = react_div.get("data-item-slug")
+            if slug:
+                slugs.append(slug)
     return slugs
 
 def get_film_data(slug):
