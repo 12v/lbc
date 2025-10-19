@@ -143,6 +143,7 @@ def main():
                     print(f"   ⚠️ {slug} — no TMDb ID found")
 
             time.sleep(0.5)  # be polite
+            break  # TEST: Stop after first film
 
         page += 1
         time.sleep(1)  # be polite
