@@ -112,8 +112,8 @@ def main():
             print("   ⚠️ Viewer count not found — stopping.")
             break
 
-        if viewer_count < 1000:
-            print(f"   🛑 Fewer than 1000 viewers — resetting to page 1.")
+        if viewer_count < 10000:
+            print(f"   🛑 Fewer than 10000 viewers — resetting to page 1.")
             page = 1
             break
 
