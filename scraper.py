@@ -144,6 +144,9 @@ def main():
 
             time.sleep(0.5)  # be polite
 
+        page += 1
+        time.sleep(1)  # be polite
+
     save_state(page)
 
 
