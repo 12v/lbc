@@ -29,25 +29,23 @@ def get_film_slugs_from_ajax_page(page):
                 slugs.append(slug)
     return slugs
 
-def get_film_data(slug):
+def get_tmdb_id(slug):
     url = f"{BASE_URL}/film/{slug}/"
     res = requests.get(url, headers=HEADERS)
     if res.status_code != 200:
-        print(f"❌ Failed to fetch {slug}")
-        return None, None
+        return None
 
     match = re.search(r'<body[^>]+data-tmdb-id="(\d+)"', res.text)
-    tmdb_id = match.group(1) if match else None
+    return match.group(1) if match else None
 
-    # Get viewer count from stats endpoint
+def get_viewer_count(slug):
     stats_url = f"{BASE_URL}/csi/film/{slug}/stats/"
     stats_res = requests.get(stats_url, headers=HEADERS)
-    viewer_count = None
-    if stats_res.status_code == 200:
-        match = re.search(r'Watched by ([\d,]+)&nbsp;members', stats_res.text)
-        viewer_count = int(match.group(1).replace(",", "")) if match else None
+    if stats_res.status_code != 200:
+        return None
 
-    return tmdb_id, viewer_count
+    match = re.search(r'Watched by ([\d,]+)&nbsp;members', stats_res.text)
+    return int(match.group(1).replace(",", "")) if match else None
 
 def main():
     out_dir = Path("cache")
@@ -66,7 +64,7 @@ def main():
         # Check viewer count for first film to determine if we should continue
         first_slug = slugs[0]
         print(f"→ Checking viewer count for {first_slug}...")
-        tmdb_id, viewer_count = get_film_data(first_slug)
+        viewer_count = get_viewer_count(first_slug)
 
         if viewer_count is not None:
             print(f"   👀 {viewer_count} viewers")
@@ -78,13 +76,16 @@ def main():
             print(f"   🛑 Fewer than 1000 viewers — stopping.")
             break
 
-        # Save TMDb ID for first film
-        if tmdb_id:
-            with open(out_dir / f"{first_slug}.txt", "w") as f:
-                f.write(tmdb_id + "\n")
-            print(f"   ✅ Saved TMDb ID {tmdb_id}")
-        else:
-            print(f"   ⚠️ No TMDb ID found for {first_slug}")
+        # Save TMDb IDs for all films on this page
+        for slug in slugs:
+            tmdb_id = get_tmdb_id(slug)
+            if tmdb_id:
+                with open(out_dir / f"{slug}.txt", "w") as f:
+                    f.write(tmdb_id + "\n")
+                print(f"   ✅ {slug} → {tmdb_id}")
+            else:
+                print(f"   ⚠️ {slug} — no TMDb ID found")
+            time.sleep(0.5)  # be polite
 
         page += 1
         time.sleep(1)  # be polite
