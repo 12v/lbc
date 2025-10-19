@@ -110,16 +110,31 @@ def main():
             page = 1
             break
 
-        # Save TMDb IDs for all films on this page
+        # Save/validate TMDb IDs for all films on this page
         for slug in slugs:
             tmdb_id = get_tmdb_id(slug)
+            cache_path = get_cache_path(slug)
+
             if tmdb_id:
-                cache_path = get_cache_path(slug)
-                with open(cache_path, "w") as f:
-                    f.write(tmdb_id + "\n")
-                print(f"   ✅ {slug} → {tmdb_id}")
+                # Check if existing file has same ID
+                existing_id = None
+                if cache_path.exists():
+                    existing_id = cache_path.read_text().strip()
+
+                if existing_id == tmdb_id:
+                    print(f"   ✓ {slug} → {tmdb_id} (unchanged)")
+                else:
+                    with open(cache_path, "w") as f:
+                        f.write(tmdb_id + "\n")
+                    print(f"   ✅ {slug} → {tmdb_id}")
             else:
-                print(f"   ⚠️ {slug} — no TMDb ID found")
+                # No TMDb ID found - delete file if it exists
+                if cache_path.exists():
+                    cache_path.unlink()
+                    print(f"   🗑️ {slug} — removed (no TMDb ID)")
+                else:
+                    print(f"   ⚠️ {slug} — no TMDb ID found")
+
             time.sleep(0.5)  # be polite
 
         page += 1
