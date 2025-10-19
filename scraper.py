@@ -11,18 +11,22 @@ HEADERS = {
 }
 
 def get_film_slugs_from_page(page_number):
-    res = requests.get(POPULAR_URL.format(page_number), headers=HEADERS)
+    url = POPULAR_URL.format(page_number)
+    res = requests.get(url, headers=HEADERS)
+    print(f"→ GET {url} → {res.status_code}")
     if res.status_code != 200:
         return []
+
     soup = BeautifulSoup(res.text, "html.parser")
-    films = soup.select("li.poster-container a.film-poster")
+
+    poster_items = soup.select("li.posteritem")
     slugs = []
-    for a in films:
-        href = a.get("href")
-        if href and href.startswith("/film/"):
-            slug = href.strip("/").split("/")[1]
+    for li in poster_items:
+        slug = li.get("data-item-slug")
+        if slug:
             slugs.append(slug)
     return slugs
+
 
 def get_film_data(slug):
     url = f"{BASE_URL}/film/{slug}/"
