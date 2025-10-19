@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: scrape
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   scrape-and-deploy:
