@@ -11,7 +11,8 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 }
 STATE_FILE = Path("state.txt")
-MAX_RUNTIME_SECS = 10 * 60  # 10 minutes
+MAX_RUNTIME_SECS = 2 * 60
+
 
 def get_cache_path(slug):
     """Get cache file path for slug using MD5 hash prefix."""
@@ -20,6 +21,7 @@ def get_cache_path(slug):
     docs_dir = Path("docs") / prefix
     docs_dir.mkdir(parents=True, exist_ok=True)
     return docs_dir / f"{slug}.txt"
+
 
 def load_state():
     """Load current page number from state file."""
@@ -32,9 +34,11 @@ def load_state():
             pass
     return 1
 
+
 def save_state(page):
     """Save current page number to state file."""
     STATE_FILE.write_text(str(page))
+
 
 def get_film_slugs_from_ajax_page(page):
     url = AJAX_POPULAR_PAGE_URL.format(page)
@@ -55,6 +59,7 @@ def get_film_slugs_from_ajax_page(page):
                 slugs.append(slug)
     return slugs
 
+
 def get_tmdb_id(slug):
     url = f"{BASE_URL}/film/{slug}/"
     res = requests.get(url, headers=HEADERS)
@@ -64,14 +69,16 @@ def get_tmdb_id(slug):
     match = re.search(r'<body[^>]+data-tmdb-id="(\d+)"', res.text)
     return match.group(1) if match else None
 
+
 def get_viewer_count(slug):
     stats_url = f"{BASE_URL}/csi/film/{slug}/stats/"
     stats_res = requests.get(stats_url, headers=HEADERS)
     if stats_res.status_code != 200:
         return None
 
-    match = re.search(r'Watched by ([\d,]+)&nbsp;members', stats_res.text)
+    match = re.search(r"Watched by ([\d,]+)&nbsp;members", stats_res.text)
     return int(match.group(1).replace(",", "")) if match else None
+
 
 def main():
     Path("docs").mkdir(exist_ok=True)
@@ -141,6 +148,7 @@ def main():
         time.sleep(1)  # be polite
 
     save_state(page)
+
 
 if __name__ == "__main__":
     main()
