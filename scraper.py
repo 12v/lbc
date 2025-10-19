@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 import time
 import re
+import hashlib
 
 BASE_URL = "https://letterboxd.com"
 AJAX_POPULAR_PAGE_URL = BASE_URL + "/films/ajax/popular/page/{}/"
@@ -11,6 +12,14 @@ HEADERS = {
 }
 STATE_FILE = Path("state.txt")
 MAX_RUNTIME_SECS = 10 * 60  # 10 minutes
+
+def get_cache_path(slug):
+    """Get cache file path for slug using MD5 hash prefix."""
+    hash_hex = hashlib.md5(slug.encode()).hexdigest()
+    prefix = hash_hex[:2]
+    docs_dir = Path("docs") / prefix
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    return docs_dir / f"{slug}.txt"
 
 def load_state():
     """Load current page number from state file."""
@@ -65,8 +74,7 @@ def get_viewer_count(slug):
     return int(match.group(1).replace(",", "")) if match else None
 
 def main():
-    out_dir = Path("cache")
-    out_dir.mkdir(exist_ok=True)
+    Path("docs").mkdir(exist_ok=True)
 
     start_time = time.time()
     page = load_state()
@@ -106,7 +114,8 @@ def main():
         for slug in slugs:
             tmdb_id = get_tmdb_id(slug)
             if tmdb_id:
-                with open(out_dir / f"{slug}.txt", "w") as f:
+                cache_path = get_cache_path(slug)
+                with open(cache_path, "w") as f:
                     f.write(tmdb_id + "\n")
                 print(f"   ✅ {slug} → {tmdb_id}")
             else:
