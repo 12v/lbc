@@ -4,8 +4,12 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+    - cron: '*/10 * * * *'  # Every 10 minutes
   workflow_dispatch:
+
+concurrency:
+  group: scrape
+  cancel-in-progress: true
 
 jobs:
   scrape-and-deploy:

@@ -9,6 +9,23 @@ AJAX_POPULAR_PAGE_URL = BASE_URL + "/films/ajax/popular/page/{}/"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 }
+STATE_FILE = Path("state.txt")
+MAX_RUNTIME_SECS = 10 * 60  # 10 minutes
+
+def load_state():
+    """Load current page number from state file."""
+    if STATE_FILE.exists():
+        try:
+            page = int(STATE_FILE.read_text().strip())
+            print(f"Resuming from page {page}...")
+            return page
+        except (ValueError, IOError):
+            pass
+    return 1
+
+def save_state(page):
+    """Save current page number to state file."""
+    STATE_FILE.write_text(str(page))
 
 def get_film_slugs_from_ajax_page(page):
     url = AJAX_POPULAR_PAGE_URL.format(page)
@@ -51,14 +68,22 @@ def main():
     out_dir = Path("cache")
     out_dir.mkdir(exist_ok=True)
 
-    page = 1
+    start_time = time.time()
+    page = load_state()
 
     while True:
+        # Check if we've been running for 10 minutes
+        elapsed = time.time() - start_time
+        if elapsed > MAX_RUNTIME_SECS:
+            print(f"\n⏱️ 10-minute runtime limit reached. Stopping.")
+            break
+
         print(f"\n📄 Processing AJAX popular films page {page}...")
         slugs = get_film_slugs_from_ajax_page(page)
 
         if not slugs:
-            print("No more films found — ending scrape.")
+            print("No more films found — resetting to page 1.")
+            page = 1
             break
 
         # Check viewer count for first film to determine if we should continue
@@ -73,7 +98,8 @@ def main():
             break
 
         if viewer_count < 1000:
-            print(f"   🛑 Fewer than 1000 viewers — stopping.")
+            print(f"   🛑 Fewer than 1000 viewers — resetting to page 1.")
+            page = 1
             break
 
         # Save TMDb IDs for all films on this page
@@ -89,6 +115,8 @@ def main():
 
         page += 1
         time.sleep(1)  # be polite
+
+    save_state(page)
 
 if __name__ == "__main__":
     main()
