@@ -54,9 +54,8 @@ def main():
     out_dir.mkdir(exist_ok=True)
 
     page = 1
-    stop = False
 
-    while not stop:
+    while True:
         print(f"\n📄 Processing AJAX popular films page {page}...")
         slugs = get_film_slugs_from_ajax_page(page)
 
@@ -64,29 +63,28 @@ def main():
             print("No more films found — ending scrape.")
             break
 
-        for slug in slugs:
-            print(f"→ Fetching data for {slug}...")
-            tmdb_id, viewer_count = get_film_data(slug)
+        # Check viewer count for first film to determine if we should continue
+        first_slug = slugs[0]
+        print(f"→ Checking viewer count for {first_slug}...")
+        tmdb_id, viewer_count = get_film_data(first_slug)
 
-            if viewer_count is not None:
-                print(f"   👀 {viewer_count} viewers")
-            else:
-                print("   ⚠️ Viewer count not found — skipping")
-                continue
+        if viewer_count is not None:
+            print(f"   👀 {viewer_count} viewers")
+        else:
+            print("   ⚠️ Viewer count not found — stopping.")
+            break
 
-            if viewer_count < 1000:
-                print(f"   🛑 Fewer than 1000 viewers — stopping.")
-                stop = True
-                break
+        if viewer_count < 1000:
+            print(f"   🛑 Fewer than 1000 viewers — stopping.")
+            break
 
-            if tmdb_id:
-                with open(out_dir / f"{slug}.txt", "w") as f:
-                    f.write(tmdb_id + "\n")
-                print(f"   ✅ Saved TMDb ID {tmdb_id}")
-            else:
-                print(f"   ⚠️ No TMDb ID found for {slug}")
-
-            time.sleep(0.5)  # be polite
+        # Save TMDb ID for first film
+        if tmdb_id:
+            with open(out_dir / f"{first_slug}.txt", "w") as f:
+                f.write(tmdb_id + "\n")
+            print(f"   ✅ Saved TMDb ID {tmdb_id}")
+        else:
+            print(f"   ⚠️ No TMDb ID found for {first_slug}")
 
         page += 1
         time.sleep(1)  # be polite
