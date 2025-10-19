@@ -143,9 +143,6 @@ def main():
                     print(f"   ⚠️ {slug} — no TMDb ID found")
 
             time.sleep(0.5)  # be polite
-            break  # TEST: Stop after first film
-
-        break  # TEST: Stop after first page
 
     save_state(page)
 
