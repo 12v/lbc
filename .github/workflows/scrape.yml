@@ -1,0 +1,39 @@
+name: Scrape Letterboxd
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+  workflow_dispatch:
+
+jobs:
+  scrape-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run scraper
+      run: python scraper.py
+
+    - name: Commit and deploy to GitHub Pages
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git checkout --orphan gh-pages
+        git rm -rf .
+        cp -r cache/* .
+        touch .nojekyll
+        git add .
+        git commit -m "Update cache"
+        git push -f origin gh-pages
