@@ -1,32 +1,22 @@
 import requests
-from bs4 import BeautifulSoup
 from pathlib import Path
 import time
 import re
 
 BASE_URL = "https://letterboxd.com"
-POPULAR_URL = BASE_URL + "/films/popular/page/{}/"
+AJAX_POPULAR_URL = BASE_URL + "/films/ajax/popular/"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 }
 
-def get_film_slugs_from_page(page_number):
-    url = POPULAR_URL.format(page_number)
-    res = requests.get(url, headers=HEADERS)
-    print(f"→ GET {url} → {res.status_code}")
+def get_popular_films():
+    res = requests.get(AJAX_POPULAR_URL, headers=HEADERS)
+    print(f"→ GET {AJAX_POPULAR_URL} → {res.status_code}")
     if res.status_code != 200:
         return []
-
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    poster_items = soup.select("li.posteritem")
-    slugs = []
-    for li in poster_items:
-        slug = li.get("data-item-slug")
-        if slug:
-            slugs.append(slug)
-    return slugs
-
+    data = res.json()
+    # 'films' is a list of dicts with film info
+    return data.get("films", [])
 
 def get_film_data(slug):
     url = f"{BASE_URL}/film/{slug}/"
@@ -34,20 +24,13 @@ def get_film_data(slug):
     if res.status_code != 200:
         print(f"❌ Failed to fetch {slug}")
         return None, None
-    soup = BeautifulSoup(res.text, "html.parser")
+    # Extract tmdb id from body[data-tmdb-id]
+    match = re.search(r'<body[^>]+data-tmdb-id="(\d+)"', res.text)
+    tmdb_id = match.group(1) if match else None
 
-    # TMDb ID
-    body = soup.find("body")
-    tmdb_id = body["data-tmdb-id"] if body and body.has_attr("data-tmdb-id") else None
-
-    # Viewer count (extract from "Watched by X people" text)
-    stats_section = soup.select_one("section#featured-film-header")
-    viewer_count = None
-    if stats_section:
-        text = stats_section.get_text()
-        match = re.search(r"Watched by ([\d,]+) people", text)
-        if match:
-            viewer_count = int(match.group(1).replace(",", ""))
+    # Extract viewer count from "Watched by X people" text
+    match = re.search(r"Watched by ([\d,]+) people", res.text)
+    viewer_count = int(match.group(1).replace(",", "")) if match else None
 
     return tmdb_id, viewer_count
 
@@ -55,42 +38,39 @@ def main():
     out_dir = Path("cache")
     out_dir.mkdir(exist_ok=True)
 
-    page = 1
-    stop = False
+    print(f"\n📄 Fetching popular films from AJAX endpoint...")
+    films = get_popular_films()
 
-    while not stop:
-        print(f"\n📄 Processing popular films page {page}...")
-        slugs = get_film_slugs_from_page(page)
-        if not slugs:
-            print("No more films found — ending scrape.")
+    if not films:
+        print("No films found in AJAX response.")
+        return
+
+    for film in films:
+        slug = film.get("slug")
+        if not slug:
+            continue
+
+        print(f"→ Fetching data for {slug}...")
+        tmdb_id, viewer_count = get_film_data(slug)
+
+        if viewer_count is not None:
+            print(f"   👀 {viewer_count} viewers")
+        else:
+            print("   ⚠️ Viewer count not found — skipping")
+            continue
+
+        if viewer_count < 1000:
+            print(f"   🛑 Fewer than 1000 viewers — stopping.")
             break
 
-        for slug in slugs:
-            print(f"→ Fetching data for {slug}...")
-            tmdb_id, viewer_count = get_film_data(slug)
+        if tmdb_id:
+            with open(out_dir / f"{slug}.txt", "w") as f:
+                f.write(tmdb_id + "\n")
+            print(f"   ✅ Saved TMDb ID {tmdb_id}")
+        else:
+            print(f"   ⚠️ No TMDb ID found for {slug}")
 
-            if viewer_count is not None:
-                print(f"   👀 {viewer_count} viewers")
-            else:
-                print("   ⚠️ Viewer count not found — skipping")
-                continue
-
-            if viewer_count < 1000:
-                print(f"   🛑 Fewer than 1000 viewers — stopping.")
-                stop = True
-                break
-
-            if tmdb_id:
-                with open(out_dir / f"{slug}.txt", "w") as f:
-                    f.write(tmdb_id + "\n")
-                print(f"   ✅ Saved TMDb ID {tmdb_id}")
-            else:
-                print(f"   ⚠️ No TMDb ID found for {slug}")
-
-            time.sleep(0.5)  # be polite
-
-        page += 1
-        time.sleep(1)  # be polite
+        time.sleep(0.5)  # be polite
 
 if __name__ == "__main__":
     main()
