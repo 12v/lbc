@@ -11,7 +11,7 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
 }
 STATE_FILE = Path("state.txt")
-MAX_RUNTIME_SECS = 10 * 60
+MAX_RUNTIME_SECS = 50 * 60
 
 
 def get_cache_path(slug):
@@ -87,7 +87,6 @@ def main():
     page = load_state()
 
     while True:
-        # Check if we've been running for 10 minutes
         elapsed = time.time() - start_time
         if elapsed > MAX_RUNTIME_SECS:
             print(f"\n⏱️ 10-minute runtime limit reached. Stopping.")
