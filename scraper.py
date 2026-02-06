@@ -4,6 +4,8 @@ from pathlib import Path
 import time
 import re
 import hashlib
+import json
+from datetime import date
 
 BASE_URL = "https://letterboxd.com"
 AJAX_POPULAR_PAGE_URL = BASE_URL + "/films/ajax/popular/page/{}/"
@@ -26,7 +28,7 @@ def get_cache_path(slug):
     prefix = hash_hex[:2]
     docs_dir = Path("docs") / prefix
     docs_dir.mkdir(parents=True, exist_ok=True)
-    return docs_dir / f"{slug}.txt"
+    return docs_dir / f"{slug}.json"
 
 
 def load_state():
@@ -86,6 +88,75 @@ def get_viewer_count(slug):
     return int(match.group(1).replace(",", "")) if match else None
 
 
+def get_ratings(slug):
+    """Fetch average rating and rating count from ratings-summary endpoint."""
+    url = f"{BASE_URL}/csi/film/{slug}/ratings-summary/"
+    res = session.get(url)
+    if res.status_code != 200:
+        return None, None
+
+    soup = BeautifulSoup(res.text, "html.parser")
+    rating_link = soup.select_one("span.average-rating a")
+    if not rating_link:
+        return None, None
+
+    title_attr = rating_link.get("title", "")
+    match = re.search(r'Weighted average of ([\d.]+) based on ([\d,]+) ratings', title_attr)
+    if match:
+        avg_rating = float(match.group(1))
+        num_ratings = int(match.group(2).replace(",", ""))
+        return avg_rating, num_ratings
+
+    return None, None
+
+
+def load_film_data(cache_path, slug):
+    """Load existing film data from JSON file, or return empty structure if not exists."""
+    if cache_path.exists():
+        try:
+            with open(cache_path, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    return {
+        "tmdb_id": None,
+        "slug": slug,
+        "ratings": []
+    }
+
+
+def save_film_data(cache_path, film_data):
+    """Save film data to JSON file."""
+    temp_path = cache_path.with_suffix(".tmp")
+    with open(temp_path, "w") as f:
+        json.dump(film_data, f, indent=2)
+    temp_path.rename(cache_path)
+
+
+def add_rating_entry(film_data, avg_rating, num_ratings):
+    """Add or update rating entry for current date. Returns True if changed."""
+    today = date.today().isoformat()
+
+    # Check if entry exists for today
+    for entry in film_data["ratings"]:
+        if entry["date"] == today:
+            # Update existing entry
+            changed = entry["avg"] != avg_rating or entry["count"] != num_ratings
+            entry["avg"] = avg_rating
+            entry["count"] = num_ratings
+            return changed
+
+    # Add new entry
+    film_data["ratings"].append({
+        "date": today,
+        "avg": avg_rating,
+        "count": num_ratings
+    })
+    film_data["ratings"].sort(key=lambda x: x["date"])
+    return True
+
+
 def main():
     Path("docs").mkdir(exist_ok=True)
 
@@ -122,30 +193,49 @@ def main():
             page = 1
             break
 
-        # Save/validate TMDb IDs for all films on this page
+        # Save/validate TMDb IDs and ratings for all films on this page
         for slug in slugs:
-            tmdb_id = get_tmdb_id(slug)
             cache_path = get_cache_path(slug)
+            film_data = load_film_data(cache_path, slug)
 
-            if tmdb_id:
-                # Check if existing file has same ID
-                existing_id = None
-                if cache_path.exists():
-                    existing_id = cache_path.read_text().strip()
+            # Fetch TMDb ID
+            tmdb_id = get_tmdb_id(slug)
 
-                if existing_id == tmdb_id:
-                    print(f"   ✓ {slug} → {tmdb_id} (unchanged)")
-                else:
-                    with open(cache_path, "w") as f:
-                        f.write(tmdb_id + "\n")
-                    print(f"   ✅ {slug} → {tmdb_id}")
-            else:
+            if not tmdb_id:
                 # No TMDb ID found - delete file if it exists
                 if cache_path.exists():
                     cache_path.unlink()
                     print(f"   🗑️ {slug} — removed (no TMDb ID)")
                 else:
                     print(f"   ⚠️ {slug} — no TMDb ID found")
+                time.sleep(0.5)
+                continue
+
+            # Fetch ratings
+            avg_rating, num_ratings = get_ratings(slug)
+
+            # Track what changed
+            tmdb_changed = film_data["tmdb_id"] != tmdb_id
+            film_data["tmdb_id"] = tmdb_id
+
+            rating_changed = False
+            if avg_rating is not None and num_ratings is not None:
+                rating_changed = add_rating_entry(film_data, avg_rating, num_ratings)
+
+            # Save updated data
+            save_film_data(cache_path, film_data)
+
+            # Print status
+            if avg_rating is not None and num_ratings is not None:
+                if tmdb_changed or rating_changed:
+                    print(f"   ✅ {slug} → TMDb:{tmdb_id} | ⭐{avg_rating} ({num_ratings:,} ratings)")
+                else:
+                    print(f"   ✓ {slug} → TMDb:{tmdb_id} | ⭐{avg_rating} ({num_ratings:,} ratings) (unchanged)")
+            else:
+                if tmdb_changed:
+                    print(f"   ✅ {slug} → TMDb:{tmdb_id} | ⚠️ no ratings")
+                else:
+                    print(f"   ✓ {slug} → TMDb:{tmdb_id} | ⚠️ no ratings (unchanged)")
 
             time.sleep(0.5)  # be polite
 
