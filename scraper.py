@@ -5,12 +5,27 @@ import time
 import re
 import hashlib
 import json
+import random
 from datetime import date
 
 BASE_URL = "https://letterboxd.com"
 AJAX_POPULAR_PAGE_URL = BASE_URL + "/films/ajax/popular/page/{}/"
 STATE_FILE = Path("state.txt")
-MAX_RUNTIME_SECS = 50 * 60
+MAX_RUNTIME_SECS = 60 * 60
+
+# Randomized delays to appear more human-like
+DELAY_BETWEEN_FILMS = (1.0, 3.0)  # Random delay between films (min, max seconds)
+DELAY_BETWEEN_PAGES = (2.0, 5.0)  # Random delay between pages
+DELAY_BETWEEN_REQUESTS = (0.3, 0.8)  # Random delay between individual requests for same film
+
+# User agent rotation for more natural requests
+USER_AGENTS = [
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+]
 
 # Create a cloudscraper session to bypass Cloudflare
 session = cloudscraper.create_scraper(
@@ -20,6 +35,18 @@ session = cloudscraper.create_scraper(
         'desktop': True
     }
 )
+
+
+def random_delay(delay_range):
+    """Sleep for a random duration within the given range."""
+    delay = random.uniform(delay_range[0], delay_range[1])
+    time.sleep(delay)
+
+
+def get_with_random_ua(url):
+    """Make a request with a random user agent."""
+    headers = {'User-Agent': random.choice(USER_AGENTS)}
+    return session.get(url, headers=headers)
 
 
 def get_cache_path(slug):
@@ -50,7 +77,7 @@ def save_state(page):
 
 def get_film_slugs_from_ajax_page(page):
     url = AJAX_POPULAR_PAGE_URL.format(page)
-    res = session.get(url)
+    res = get_with_random_ua(url)
     print(f"→ GET {url} → {res.status_code}")
     if res.status_code != 200:
         return []
@@ -70,7 +97,7 @@ def get_film_slugs_from_ajax_page(page):
 
 def get_tmdb_id(slug):
     url = f"{BASE_URL}/film/{slug}/"
-    res = session.get(url)
+    res = get_with_random_ua(url)
     if res.status_code != 200:
         return None
 
@@ -80,7 +107,7 @@ def get_tmdb_id(slug):
 
 def get_viewer_count(slug):
     stats_url = f"{BASE_URL}/csi/film/{slug}/stats/"
-    stats_res = session.get(stats_url)
+    stats_res = get_with_random_ua(stats_url)
     if stats_res.status_code != 200:
         return None
 
@@ -91,7 +118,7 @@ def get_viewer_count(slug):
 def get_ratings(slug):
     """Fetch average rating and rating count from ratings-summary endpoint."""
     url = f"{BASE_URL}/csi/film/{slug}/ratings-summary/"
-    res = session.get(url)
+    res = get_with_random_ua(url)
     if res.status_code != 200:
         return None, None
 
@@ -166,7 +193,7 @@ def main():
     while True:
         elapsed = time.time() - start_time
         if elapsed > MAX_RUNTIME_SECS:
-            print(f"\n⏱️ 10-minute runtime limit reached. Stopping.")
+            print(f"\n⏱️ Runtime limit reached. Stopping.")
             break
 
         print(f"\n📄 Processing AJAX popular films page {page}...")
@@ -193,6 +220,9 @@ def main():
             page = 1
             break
 
+        # Small pause before processing films
+        random_delay(DELAY_BETWEEN_REQUESTS)
+
         # Save/validate TMDb IDs and ratings for all films on this page
         for slug in slugs:
             cache_path = get_cache_path(slug)
@@ -208,8 +238,11 @@ def main():
                     print(f"   🗑️ {slug} — removed (no TMDb ID)")
                 else:
                     print(f"   ⚠️ {slug} — no TMDb ID found")
-                time.sleep(0.5)
+                random_delay(DELAY_BETWEEN_FILMS)
                 continue
+
+            # Small delay between requests for same film
+            random_delay(DELAY_BETWEEN_REQUESTS)
 
             # Fetch ratings
             avg_rating, num_ratings = get_ratings(slug)
@@ -237,10 +270,12 @@ def main():
                 else:
                     print(f"   ✓ {slug} → TMDb:{tmdb_id} | ⚠️ no ratings (unchanged)")
 
-            time.sleep(0.5)  # be polite
+            # Random delay between films
+            random_delay(DELAY_BETWEEN_FILMS)
 
+        # Random delay between pages
+        random_delay(DELAY_BETWEEN_PAGES)
         page += 1
-        time.sleep(1)  # be polite
 
     save_state(page)
 
