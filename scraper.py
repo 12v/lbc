@@ -31,9 +31,10 @@ USER_AGENTS = [
 session = cloudscraper.create_scraper(
     browser={
         'browser': 'chrome',
-        'platform': 'darwin',
+        'platform': 'windows',
         'desktop': True
-    }
+    },
+    delay=10
 )
 
 
@@ -43,10 +44,39 @@ def random_delay(delay_range):
     time.sleep(delay)
 
 
-def get_with_random_ua(url):
-    """Make a request with a random user agent."""
-    headers = {'User-Agent': random.choice(USER_AGENTS)}
-    return session.get(url, headers=headers)
+def get_with_random_ua(url, retries=3):
+    """Make a request with a random user agent and realistic headers."""
+    headers = {
+        'User-Agent': random.choice(USER_AGENTS),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Cache-Control': 'max-age=0',
+    }
+
+    for attempt in range(retries):
+        try:
+            response = session.get(url, headers=headers, timeout=30)
+            if response.status_code == 403 and attempt < retries - 1:
+                wait_time = (attempt + 1) * 2
+                print(f"   ⚠️ Got 403, waiting {wait_time}s before retry {attempt + 2}/{retries}...")
+                time.sleep(wait_time)
+                continue
+            return response
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f"   ⚠️ Request failed: {e}, retrying...")
+                time.sleep(2)
+                continue
+            raise
+
+    return response
 
 
 def get_cache_path(slug):
