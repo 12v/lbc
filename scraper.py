@@ -228,28 +228,28 @@ def main():
             cache_path = get_cache_path(slug)
             film_data = load_film_data(cache_path, slug)
 
-            # Fetch TMDb ID
-            tmdb_id = get_tmdb_id(slug)
-
-            if not tmdb_id:
-                # No TMDb ID found - delete file if it exists
-                if cache_path.exists():
-                    cache_path.unlink()
-                    print(f"   🗑️ {slug} — removed (no TMDb ID)")
-                else:
-                    print(f"   ⚠️ {slug} — no TMDb ID found")
-                random_delay(DELAY_BETWEEN_FILMS)
-                continue
-
-            # Small delay between requests for same film
-            random_delay(DELAY_BETWEEN_REQUESTS)
+            # Use cached TMDb ID if available, otherwise fetch it
+            tmdb_changed = False
+            if film_data["tmdb_id"]:
+                tmdb_id = film_data["tmdb_id"]
+            else:
+                tmdb_id = get_tmdb_id(slug)
+                if not tmdb_id:
+                    # No TMDb ID found - delete file if it exists
+                    if cache_path.exists():
+                        cache_path.unlink()
+                        print(f"   🗑️ {slug} — removed (no TMDb ID)")
+                    else:
+                        print(f"   ⚠️ {slug} — no TMDb ID found")
+                    random_delay(DELAY_BETWEEN_FILMS)
+                    continue
+                tmdb_changed = True
+                film_data["tmdb_id"] = tmdb_id
+                # Small delay between requests for same film
+                random_delay(DELAY_BETWEEN_REQUESTS)
 
             # Fetch ratings
             avg_rating, num_ratings = get_ratings(slug)
-
-            # Track what changed
-            tmdb_changed = film_data["tmdb_id"] != tmdb_id
-            film_data["tmdb_id"] = tmdb_id
 
             rating_changed = False
             if avg_rating is not None and num_ratings is not None:
