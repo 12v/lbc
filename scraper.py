@@ -1,4 +1,4 @@
-import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 from pathlib import Path
 import time
@@ -7,11 +7,17 @@ import hashlib
 
 BASE_URL = "https://letterboxd.com"
 AJAX_POPULAR_PAGE_URL = BASE_URL + "/films/ajax/popular/page/{}/"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-}
 STATE_FILE = Path("state.txt")
 MAX_RUNTIME_SECS = 50 * 60
+
+# Create a cloudscraper session to bypass Cloudflare
+session = cloudscraper.create_scraper(
+    browser={
+        'browser': 'chrome',
+        'platform': 'darwin',
+        'desktop': True
+    }
+)
 
 
 def get_cache_path(slug):
@@ -42,7 +48,7 @@ def save_state(page):
 
 def get_film_slugs_from_ajax_page(page):
     url = AJAX_POPULAR_PAGE_URL.format(page)
-    res = requests.get(url, headers=HEADERS)
+    res = session.get(url)
     print(f"→ GET {url} → {res.status_code}")
     if res.status_code != 200:
         return []
@@ -62,7 +68,7 @@ def get_film_slugs_from_ajax_page(page):
 
 def get_tmdb_id(slug):
     url = f"{BASE_URL}/film/{slug}/"
-    res = requests.get(url, headers=HEADERS)
+    res = session.get(url)
     if res.status_code != 200:
         return None
 
@@ -72,7 +78,7 @@ def get_tmdb_id(slug):
 
 def get_viewer_count(slug):
     stats_url = f"{BASE_URL}/csi/film/{slug}/stats/"
-    stats_res = requests.get(stats_url, headers=HEADERS)
+    stats_res = session.get(stats_url)
     if stats_res.status_code != 200:
         return None
 
